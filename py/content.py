@@ -272,6 +272,8 @@ def slugify(text):
 
 
 LOGO_MAX_BYTES = 512 * 1024
+PHOTO_MAX_BYTES = 900 * 1024
+PHOTO_MAX_COUNT = 8
 
 _MIME_EXT = {
     "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
@@ -403,6 +405,7 @@ DEFAULT_BRIEF = {
     "name": "", "tagline": "", "preset": "general", "city": "",
     "currency": "", "currency_after": False,
     "logo": "", "logo_has_name": False, "logo_needs_light": True,
+    "photos": [],
     "phone": "", "email": "", "address": "", "hours": "Mon–Fri, 8am – 6pm",
     "services": [], "owner": "", "owner_title": "", "domain": "",
     "cta": "", "years": "", "about": "", "layout": "classic", "theme": "slate",
@@ -460,6 +463,29 @@ def normalise(brief):
         except ValueError as exc:
             b["logo_error"] = str(exc)
             b["logo"] = ""
+
+    # Real photos beat the generated artwork, so any the brief carries are used in
+    # place of it. Unusable ones are dropped with a reason rather than left as broken
+    # images, exactly like the logo.
+    photos, photo_errors = [], []
+    for i, item in enumerate(b["photos"] or [], 1):
+        uri = item.get("uri") if isinstance(item, dict) else item
+        alt = (item.get("alt") or "").strip() if isinstance(item, dict) else ""
+        try:
+            mime, data = parse_data_uri(uri)
+            if len(data) > PHOTO_MAX_BYTES:
+                raise ValueError(f"{len(data) // 1024} KB is too big — keep photos "
+                                 f"under {PHOTO_MAX_BYTES // 1024} KB")
+            size = image_size(data, mime) or (1.0, 1.0)
+            photos.append({"uri": uri, "mime": mime, "ext": _MIME_EXT[mime],
+                           "w": size[0], "h": size[1], "alt": alt})
+        except ValueError as exc:
+            photo_errors.append(f"photo {i}: {exc}")
+        if len(photos) >= PHOTO_MAX_COUNT:
+            break
+    b["photos"] = photos
+    b["photo_errors"] = photo_errors
+    b["has_photos"] = bool(photos)
 
     # Prices stay free text ("from £120", "POA", "£45/hr"). The currency, if the brief
     # sets one, is only applied to a price typed as a bare number.
@@ -550,6 +576,12 @@ def placeholders(b):
     scan("Hero sub-heading", b.get("hero_lede", ""))
     if b.get("logo_error"):
         found.append(("Logo", f"not used — {b['logo_error']}"))
+    for err in b.get("photo_errors", []):
+        found.append(("Photo", f"not used — {err}"))
+    if not b.get("has_photos"):
+        found.append(("Photos",
+                      "none supplied, so the artwork is generated shapes — real "
+                      "photos of real work will beat them"))
     for s in b["services"]:
         scan(f"Service: {s['title']}", s["desc"])
     for p in b["points"]:

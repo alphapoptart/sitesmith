@@ -59,6 +59,8 @@ def preview(brief_json, layout, theme_key):
     b = _brief(brief_json)
     if b.get("logo"):
         b = dict(b, logo_href=b["logo"])
+    if b.get("photos"):
+        b = dict(b, photo_hrefs=[p["uri"] for p in b["photos"]])
     t = design.theme(theme_key)
     html = layouts.render("index.html", b, t, layout)
     sheet = css_for(layout, t)

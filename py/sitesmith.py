@@ -63,8 +63,8 @@ def choose(prompt, options, default_key):
         print("    ^ pick one of the numbers")
 
 
-def logo_to_data_uri(path):
-    """Read a logo off disk into the portable form the brief stores. Keeping the
+def image_to_data_uri(path, max_bytes):
+    """Read an image off disk into the portable form the brief stores. Keeping the
     brief self-contained is what lets the same file build on the phone."""
     import base64
     import mimetypes
@@ -77,13 +77,42 @@ def logo_to_data_uri(path):
                 "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"
                 }.get(path.rsplit(".", 1)[-1].lower(), "")
     if mime not in content._MIME_EXT:
-        raise ValueError(f"{os.path.basename(path)} is not a PNG, JPEG, GIF, "
-                         f"WebP or SVG")
+        name = os.path.basename(path)
+        extra = (" — export it as JPEG first" if path.lower().endswith(
+            (".heic", ".heif")) else "")
+        raise ValueError(f"{name} is not a PNG, JPEG, GIF, WebP or SVG{extra}")
     raw = open(path, "rb").read()
-    if len(raw) > content.LOGO_MAX_BYTES:
+    if len(raw) > max_bytes:
         raise ValueError(f"{os.path.basename(path)} is {len(raw) // 1024} KB — keep "
-                         f"it under {content.LOGO_MAX_BYTES // 1024} KB")
+                         f"it under {max_bytes // 1024} KB")
     return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+
+
+def logo_to_data_uri(path):
+    return image_to_data_uri(path, content.LOGO_MAX_BYTES)
+
+
+def ask_photos(b):
+    """Photos of real work. Paths, space or comma separated; globs allowed."""
+    raw = ask("Photos of your work (optional — paths, comma separated)", "")
+    if not raw:
+        return
+    import glob as globmod
+    paths = []
+    for part in raw.replace(",", " ").split():
+        hits = sorted(globmod.glob(os.path.expanduser(part.strip("'\""))))
+        paths.extend(hits or [part])
+    for path in paths[:content.PHOTO_MAX_COUNT]:
+        try:
+            b["photos"].append(photo_to_data_uri(path))
+        except ValueError as exc:
+            print(f"    ! {exc} — skipped.")
+    if b["photos"]:
+        print(f"    {len(b['photos'])} photo(s) added.")
+
+
+def photo_to_data_uri(path):
+    return image_to_data_uri(path, content.PHOTO_MAX_BYTES)
 
 
 def ask_logo(b):
@@ -169,6 +198,7 @@ def interview():
     b["services"], b["currency"], b["currency_after"] = ask_prices(names)
 
     ask_logo(b)
+    ask_photos(b)
 
     b["owner"] = ask("Name on the business card")
     b["owner_title"] = ask("Job title on the card", "Owner")
@@ -200,6 +230,11 @@ def write_site(out_dir, b, t, layout, pages=None, preview=False):
         _, raw = content.parse_data_uri(b["logo"])
         with open(os.path.join(assets, f"logo.{b['logo_ext']}"), "wb") as fh:
             fh.write(raw)
+    if b.get("photos") and not preview:
+        for i, photo in enumerate(b["photos"], 1):
+            _, raw = content.parse_data_uri(photo["uri"])
+            with open(os.path.join(assets, f"photo-{i}.{photo['ext']}"), "wb") as fh:
+                fh.write(raw)
     # A wordmark makes a poor favicon at 16px, so only a roughly square logo takes
     # that job; otherwise the generated monogram keeps it.
     if not (b.get("logo") and b.get("logo_square")):
@@ -354,13 +389,21 @@ def build_gallery(out_root, b, brief_path, open_it=True):
         shutil.rmtree(gal)
     os.makedirs(gal, exist_ok=True)
 
-    # One copy of the logo for all 160 previews rather than one each.
+    # One copy of each asset for all 160 previews rather than one copy each.
     b = dict(b)
     if b.get("logo"):
         _, raw = content.parse_data_uri(b["logo"])
         with open(os.path.join(gal, f"logo.{b['logo_ext']}"), "wb") as fh:
             fh.write(raw)
         b["logo_href"] = f"../logo.{b['logo_ext']}"
+    if b.get("photos"):
+        hrefs = []
+        for i, photo in enumerate(b["photos"], 1):
+            _, raw = content.parse_data_uri(photo["uri"])
+            with open(os.path.join(gal, f"photo-{i}.{photo['ext']}"), "wb") as fh:
+                fh.write(raw)
+            hrefs.append(f"../photo-{i}.{photo['ext']}")
+        b["photo_hrefs"] = hrefs
 
     figures = []
     total = 0
@@ -692,6 +735,8 @@ def main():
         p.add_argument("--out", default=DEFAULT_OUT)
         p.add_argument("--logo", default=None,
                        help="path to a logo image; overrides the one in the brief")
+        p.add_argument("--photo", action="append", default=None, metavar="PATH",
+                       help="a photo of your work; repeat for more, or pass a glob")
 
     p_new = sub.add_parser("new", help="interview, then build the preview gallery")
     common(p_new)
@@ -771,6 +816,16 @@ def main():
             b = content.normalise(dict(b, logo=logo_to_data_uri(args.logo)))
         except ValueError as exc:
             sys.exit(f"  --logo: {exc}")
+    if getattr(args, "photo", None):
+        import glob as globmod
+        uris = []
+        for pattern in args.photo:
+            for path in sorted(globmod.glob(os.path.expanduser(pattern))) or [pattern]:
+                try:
+                    uris.append(photo_to_data_uri(path))
+                except ValueError as exc:
+                    sys.exit(f"  --photo: {exc}")
+        b = content.normalise(dict(b, photos=uris))
 
     if cmd == "gallery":
         index, total = build_gallery(args.out, b, args.brief, open_it=not args.no_open)

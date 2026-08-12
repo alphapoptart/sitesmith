@@ -6,7 +6,7 @@ import re
 import content
 
 import design
-from design import artwork, icon_for, icon_svg
+from design import icon_for, icon_svg
 
 PAGES = [("index.html", "Home"), ("services.html", "Services"),
          ("about.html", "About"), ("contact.html", "Contact")]
@@ -213,7 +213,7 @@ def services_tiles(b, t):
     out = []
     for i, s in enumerate(b["services"]):
         out.append(f"""<a class="tile reveal" href="contact.html">
-        <span class="tile__art">{artwork(b['name'], t, variant=i + 3, w=600, h=520)}</span>
+        <span class="tile__art">{design.picture(b, t, i + 2, 600, 520, alt=s['title'])}</span>
         <span class="tile__body"><h3>{e(s['title'])}</h3>{price_tag(s, 'svc-price tile__price')}
         {svc_desc(s)}</span></a>""")
     return f'<div class="tiles">{"".join(out)}</div>'
@@ -267,6 +267,20 @@ def _stat_cells(b, t):
         cells.append(f'<div class="reveal"><div class="stat__n">{figure}</div>'
                      f'<div class="stat__l">{e(label)}</div></div>')
     return "".join(cells)
+
+
+def photo_strip(b, t, heading="Recent work"):
+    """Layouts that are type-first have nowhere to put a photo. Rather than let
+    uploaded photos go unused there, they get a strip of their own — which only
+    appears when photos actually exist, so photo-less output is unchanged."""
+    if not b.get("has_photos"):
+        return ""
+    shots = "".join(f"<div>{design.picture(b, t, i, 500, 500)}</div>"
+                    for i in range(min(6, len(b["photos"]))))
+    return f"""<section class="section section--tint"><div class="wrap">
+  <p class="eyebrow">Our work</p><h2>{e(heading)}</h2>
+  <div class="strip" style="margin-top:2rem">{shots}</div>
+</div></section>"""
 
 
 def points_band(b, t):
@@ -406,7 +420,7 @@ def home(b, t, layout):
     <p class="lede">{e(b['hero_lede'])}</p>
     {hero_buttons(b, t)}
     <div class="hero__badges">{badges}</div></div>
-  <div class="hero-art">{artwork(b['name'], t, 0, 760, 570)}</div>
+  <div class="hero-art">{design.picture(b, t, 0, 760, 570, alt=b['tagline'])}</div>
 </div></div></section>
 {points_band(b, t)}
 <section class="section"><div class="wrap">
@@ -419,7 +433,7 @@ def home(b, t, layout):
   <div class="grid grid--2" style="align-items:center;gap:clamp(2rem,5vw,4rem)">
     <div class="reveal"><p class="eyebrow">About</p><h2>Who you're dealing with</h2>
       {about_body(b, t)}</div>
-    <div class="hero-art reveal" style="aspect-ratio:1">{artwork(b['name'], t, 1, 620, 620)}</div>
+    <div class="hero-art reveal" style="aspect-ratio:1">{design.picture(b, t, 1, 620, 620)}</div>
   </div></div></section>
 <section class="section"><div class="wrap">
   <p class="eyebrow">How it works</p><h2>Three steps, no surprises</h2>
@@ -442,7 +456,7 @@ def home(b, t, layout):
 </div></section>
 <section class="section section--tint"><div class="wrap">
   <div class="grid grid--2" style="gap:clamp(2rem,5vw,4rem);align-items:center">
-    <div class="hero-art reveal" style="aspect-ratio:5/4">{artwork(b['name'], t, 2, 700, 560)}</div>
+    <div class="hero-art reveal" style="aspect-ratio:5/4">{design.picture(b, t, 1, 700, 560)}</div>
     <div class="reveal"><p class="eyebrow">About</p><h2>Who you're dealing with</h2>
       {about_body(b, t)}</div>
   </div></div></section>
@@ -460,7 +474,7 @@ def home(b, t, layout):
   <h1>{e(b['headline'])}</h1>
   <p class="lede">{e(b['hero_lede'])}</p>
   {hero_buttons(b, t)}
-  <div class="hero-art">{artwork(b['name'], t, 0, 900, 390)}</div>
+  <div class="hero-art">{design.picture(b, t, 0, 900, 390, alt=b['tagline'])}</div>
 </div></section>
 <section class="section"><div class="wrap">
   <p class="eyebrow">Services</p><h2>What we do</h2>
@@ -492,6 +506,7 @@ def home(b, t, layout):
 <section class="section"><div class="wrap">
   <span class="label">How it works</span>{steps_block(b, t)}
 </div></section>
+{photo_strip(b, t)}
 <section class="section"><div class="wrap">{quote_block(b, t)}</div></section>
 {cta_band(b, t)}"""
 
@@ -504,7 +519,7 @@ def home(b, t, layout):
     <p class="lede">{e(b['hero_lede'])}</p>
     {hero_buttons(b, t)}
     <div class="trust-row">{trust}</div></div>
-  <div class="hero-art">{artwork(b['name'], t, 0, 700, 560)}</div>
+  <div class="hero-art">{design.picture(b, t, 0, 700, 560, alt=b['tagline'])}</div>
 </div></div></section>
 <section class="section"><div class="wrap">
   <p class="eyebrow">Why us</p><h2>What you get</h2>
@@ -537,7 +552,7 @@ def home(b, t, layout):
   <div><p class="eyebrow">{eyebrow}</p><h1>{e(b['headline'])}</h1></div>
   <div><p class="lede">{e(b['hero_lede'])}</p>{hero_buttons(b, t)}</div>
 </div>
-<div class="hero-art">{artwork(b['name'], t, 0, 1200, 515)}</div>
+<div class="hero-art">{design.picture(b, t, 0, 1200, 515, alt=b['tagline'])}</div>
 </div></section>
 <section class="section"><div class="wrap">
   <p class="eyebrow">About</p><h2 class="center">Who you're dealing with</h2>
@@ -563,7 +578,7 @@ def home(b, t, layout):
     <h1>{e(b['headline'])}</h1>
     <p class="lede">{e(b['hero_lede'])}</p>
     {hero_buttons(b, t)}</div>
-  <div class="hero-art">{artwork(b['name'], t, 0, 720, 540)}</div>
+  <div class="hero-art">{design.picture(b, t, 0, 720, 540, alt=b['tagline'])}</div>
 </div></div></div></section>
 <section class="section stat-band"><div class="wrap"><div class="panel reveal">
   <div class="stats">{_stat_cells(b, t)}</div>
@@ -576,7 +591,7 @@ def home(b, t, layout):
   <div class="grid grid--2" style="gap:clamp(2rem,5vw,3.5rem);align-items:center">
     <div class="reveal"><p class="eyebrow">About</p><h2>Who you're dealing with</h2>
       {about_body(b, t)}</div>
-    <div class="hero-art reveal" style="aspect-ratio:1">{artwork(b['name'], t, 1, 620, 620)}</div>
+    <div class="hero-art reveal" style="aspect-ratio:1">{design.picture(b, t, 1, 620, 620)}</div>
   </div>
 </div></div></section>
 <section class="section"><div class="wrap"><div class="panel">
@@ -614,6 +629,7 @@ def home(b, t, layout):
     </div>
   </div>
 </div></section>
+{photo_strip(b, t)}
 <section class="section" id="how"><div class="wrap">
   <p class="eyebrow">How it works</p><h2>Three steps</h2>
   <div style="margin-top:2.5rem">{steps_block(b, t)}</div>
@@ -639,6 +655,7 @@ def home(b, t, layout):
   <p class="eyebrow">Services</p><h2>What we take on</h2>
   <div style="margin-top:2.5rem">{services_rows(b, t)}</div>
 </div></section>
+{photo_strip(b, t)}
 <section class="band band--dark"><div class="wrap">
   <div class="grid grid--2" style="gap:clamp(2rem,5vw,4rem);align-items:center">
     <div class="reveal"><p class="eyebrow">About</p><h2>Who you're dealing with</h2>
@@ -659,9 +676,9 @@ def home(b, t, layout):
   <p class="lede">{e(b['hero_lede'])}</p>
   {hero_buttons(b, t)}
   <div class="collage">
-    <div>{artwork(b['name'], t, 0, 900, 680)}</div>
-    <div>{artwork(b['name'], t, 1, 500, 660)}</div>
-    <div>{artwork(b['name'], t, 2, 1200, 350)}</div>
+    <div>{design.picture(b, t, 0, 900, 680, alt=b['tagline'])}</div>
+    <div>{design.picture(b, t, 1, 500, 660)}</div>
+    <div>{design.picture(b, t, 2, 1200, 350)}</div>
   </div>
 </div></section>
 <section class="section"><div class="wrap">
@@ -673,14 +690,14 @@ def home(b, t, layout):
   <div class="grid grid--2" style="gap:clamp(2rem,5vw,4rem);align-items:center">
     <div class="reveal"><p class="eyebrow">About</p><h2>Who you're dealing with</h2>
       {about_body(b, t)}</div>
-    <div class="hero-art reveal" style="aspect-ratio:4/5">{artwork(b['name'], t, 9, 560, 700)}</div>
+    <div class="hero-art reveal" style="aspect-ratio:4/5">{design.picture(b, t, 1, 560, 700)}</div>
   </div></div></section>
 <section class="section section--tint"><div class="wrap">
   <p class="eyebrow">Recent work</p><h2>A look at the job book</h2>
   <p class="lede" style="margin-bottom:2rem">REPLACE — swap these for real photos of your
      work. Six good ones beat thirty average ones.</p>
   <div class="strip">
-    {"".join(f"<div>{artwork(b['name'], t, 20 + i, 400, 400)}</div>" for i in range(6))}
+    {"".join(f"<div>{design.picture(b, t, i, 400, 400)}</div>" for i in range(6))}
   </div>
 </div></section>
 <section class="section"><div class="wrap" style="max-width:48rem">{quote_block(b, t)}</div></section>
@@ -782,7 +799,7 @@ def services_page(b, t, layout):
 
 def about_page(b, t, layout):
     art = "" if layout == "minimal" else f"""
-  <div class="hero-art reveal" style="aspect-ratio:4/5">{artwork(b['name'], t, 4, 620, 780)}</div>"""
+  <div class="hero-art reveal" style="aspect-ratio:4/5">{design.picture(b, t, 1, 620, 780)}</div>"""
     grid_open = ('<div class="grid grid--2" style="gap:clamp(2rem,5vw,4rem);align-items:start">'
                  if art else "<div>")
     who = ""

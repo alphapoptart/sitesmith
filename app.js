@@ -47,6 +47,7 @@
       py.runPython("import sys\nif '/app' not in sys.path: sys.path.insert(0, '/app')");
 
       status("Warming up…", 80);
+      await mediaLoadAll();
       bridge = py.pyimport("bridge");
       CAT = JSON.parse(bridge.catalogue());
 
@@ -99,6 +100,110 @@
         persist();
       }
     } catch (e) { /* nothing to carry over */ }
+  }
+
+  // --- media store -----------------------------------------------------------
+  // Photos are far too big for localStorage (iOS gives about 5 MB for the whole
+  // origin, and one phone photo can exceed that). Bytes live in IndexedDB; the
+  // brief only carries "media:<id>" references, resolved from an in-memory cache
+  // that is filled once at boot.
+  var MEDIA_DB = "sitesmith-media", MEDIA_STORE = "media";
+  var mediaCache = Object.create(null);
+  var mediaDb = null;
+
+  function mediaOpen() {
+    if (mediaDb) return Promise.resolve(mediaDb);
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(MEDIA_DB, 1);
+      req.onupgradeneeded = function () {
+        if (!req.result.objectStoreNames.contains(MEDIA_STORE)) {
+          req.result.createObjectStore(MEDIA_STORE);
+        }
+      };
+      req.onsuccess = function () { mediaDb = req.result; resolve(mediaDb); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  function mediaTx(mode, fn) {
+    return mediaOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(MEDIA_STORE, mode);
+        var out = fn(tx.objectStore(MEDIA_STORE));
+        tx.oncomplete = function () { resolve(out && out.result !== undefined ? out.result : out); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  async function mediaLoadAll() {
+    try {
+      var db = await mediaOpen();
+      await new Promise(function (resolve) {
+        var tx = db.transaction(MEDIA_STORE, "readonly");
+        var store = tx.objectStore(MEDIA_STORE);
+        var cur = store.openCursor();
+        cur.onsuccess = function () {
+          var c = cur.result;
+          if (!c) return resolve();
+          mediaCache[c.key] = c.value;
+          c.continue();
+        };
+        cur.onerror = function () { resolve(); };
+      });
+    } catch (e) { /* private mode or blocked — photos just will not persist */ }
+  }
+
+  async function mediaPut(dataUri) {
+    var buf = new TextEncoder().encode(dataUri);
+    var hash = await crypto.subtle.digest("SHA-256", buf);
+    var id = [].slice.call(new Uint8Array(hash), 0, 8)
+      .map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+    mediaCache[id] = dataUri;
+    try { await mediaTx("readwrite", function (st) { st.put(dataUri, id); }); }
+    catch (e) { toast("Could not store that image on this device"); }
+    return "media:" + id;
+  }
+
+  function mediaResolve(ref) {
+    if (typeof ref !== "string") return "";
+    if (ref.indexOf("media:") !== 0) return ref;
+    return mediaCache[ref.slice(6)] || "";
+  }
+
+  async function mediaIngest(value) {
+    // Accepts a raw data URI (from an imported brief) or an existing reference.
+    if (typeof value !== "string" || !value) return "";
+    if (value.indexOf("media:") === 0) return value;
+    if (value.indexOf("data:") === 0) return await mediaPut(value);
+    return "";
+  }
+
+  function expandBrief(b) {
+    var out = {};
+    Object.keys(b).forEach(function (k) { out[k] = b[k]; });
+    out.logo = mediaResolve(b.logo || "");
+    out.photos = (b.photos || []).map(mediaResolve).filter(Boolean);
+    return out;
+  }
+
+  async function mediaSweep() {
+    // Drop bytes no site references any more, so deleting a site frees its photos.
+    var used = Object.create(null);
+    library.forEach(function (entry) {
+      var br = entry.brief || {};
+      [br.logo].concat(br.photos || []).forEach(function (ref) {
+        if (typeof ref === "string" && ref.indexOf("media:") === 0) used[ref.slice(6)] = true;
+      });
+    });
+    var stale = Object.keys(mediaCache).filter(function (id) { return !used[id]; });
+    stale.forEach(function (id) { delete mediaCache[id]; });
+    if (!stale.length) return;
+    try {
+      await mediaTx("readwrite", function (st) {
+        stale.forEach(function (id) { st.delete(id); });
+      });
+    } catch (e) { /* best effort */ }
   }
 
   function persist() {
@@ -311,6 +416,7 @@
     if (!names.length) names = $("show-prices").checked ? currentPreset().services : [];
     out.services = names.map(function (n) { return { title: n, price: prices[n] || "" }; });
     out.logo = logoState.uri;
+    out.photos = photoRefs.slice();
     out.logo_has_name = $("logo-has-name").checked;
     out.logo_needs_light = $("logo-needs-light").checked;
     out.layout = picked.layout;
@@ -337,6 +443,8 @@
     $("logo-has-name").checked = !!b.logo_has_name;
     $("logo-needs-light").checked = b.logo_needs_light !== false;
     setLogo(b.logo || "", true);
+    photoRefs = (b.photos || []).slice();
+    renderPhotos();
   }
 
   // --- logo -----------------------------------------------------------------
@@ -357,16 +465,17 @@
     $("logo-set").hidden = !uri;
     if (!quiet) logoError("");
     if (!uri) { $("logo-thumb").removeAttribute("src"); $("logo-meta").textContent = ""; return; }
-    $("logo-thumb").src = uri;
+    var shown = mediaResolve(uri);
+    $("logo-thumb").src = shown;
     var img = new Image();
     img.onload = function () {
-      var kb = Math.round(uri.length * 0.75 / 1024);
+      var kb = Math.round(shown.length * 0.75 / 1024);
       var square = img.width / img.height >= 0.8 && img.width / img.height <= 1.25;
       $("logo-meta").textContent = img.width + " x " + img.height + " · ~" + kb + " KB · "
         + (square ? "square, so it doubles as the favicon"
                   : "wide, so the monogram stays as the favicon");
     };
-    img.src = uri;
+    img.src = shown;
   }
 
   function pickLogo(file) {
@@ -382,12 +491,107 @@
     }
     var reader = new FileReader();
     reader.onerror = function () { logoError("Could not read that file."); };
-    reader.onload = function () {
-      setLogo(String(reader.result));
+    reader.onload = async function () {
+      var ref = await mediaPut(String(reader.result));
+      setLogo(ref);
       save();
     };
     reader.readAsDataURL(file);
   }
+
+  // --- photos ----------------------------------------------------------------
+  var PHOTO_MAX_EDGE = 1600;   // plenty for a full-bleed hero on a retina screen
+  var PHOTO_QUALITY = 0.82;
+  var PHOTO_MAX = 8;
+  var photoRefs = [];
+
+  function photoError(msg) {
+    var el = $("photo-error");
+    el.textContent = msg || "";
+    el.hidden = !msg;
+  }
+
+  function downscale(file) {
+    // Re-encoding through a canvas does three jobs at once: it shrinks a 4 MB
+    // phone photo to a couple of hundred KB, strips EXIF (including GPS), and
+    // converts HEIC to JPEG on iOS where the decoder is available.
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("could not read that image"));
+      };
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.width, img.height));
+        var w = Math.max(1, Math.round(img.width * scale));
+        var h = Math.max(1, Math.round(img.height * scale));
+        var canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", PHOTO_QUALITY));
+      };
+      img.src = url;
+    });
+  }
+
+  async function addPhotos(files) {
+    photoError("");
+    var list = [].slice.call(files || []);
+    if (!list.length) return;
+    var room = PHOTO_MAX - photoRefs.length;
+    if (room <= 0) { photoError("That is the maximum of " + PHOTO_MAX + " photos."); return; }
+    if (list.length > room) {
+      photoError("Only the first " + room + " were added — " + PHOTO_MAX + " is the maximum.");
+      list = list.slice(0, room);
+    }
+    $("photo-busy").hidden = false;
+    for (var i = 0; i < list.length; i++) {
+      try {
+        var uri = await downscale(list[i]);
+        photoRefs.push(await mediaPut(uri));
+      } catch (e) {
+        photoError(list[i].name + ": " + e.message);
+      }
+    }
+    $("photo-busy").hidden = true;
+    renderPhotos();
+    save();
+  }
+
+  function renderPhotos() {
+    var wrap = $("photo-list");
+    wrap.innerHTML = "";
+    photoRefs.forEach(function (ref, i) {
+      var uri = mediaResolve(ref);
+      var cell = document.createElement("div");
+      cell.className = "photo-cell";
+      var img = document.createElement("img");
+      img.src = uri; img.alt = "Photo " + (i + 1); img.loading = "lazy";
+      var del = document.createElement("button");
+      del.type = "button"; del.className = "photo-del";
+      del.setAttribute("aria-label", "Remove photo " + (i + 1));
+      del.textContent = "\u00d7";
+      del.addEventListener("click", function () {
+        photoRefs.splice(i, 1); renderPhotos(); save(); mediaSweep();
+      });
+      cell.appendChild(img); cell.appendChild(del);
+      wrap.appendChild(cell);
+    });
+    $("photo-count").textContent = photoRefs.length
+      ? photoRefs.length + " of " + PHOTO_MAX + " · first one leads the page"
+      : "";
+    $("photo-empty").hidden = photoRefs.length > 0;
+  }
+
+  $("photo-pick").addEventListener("click", function () { $("photo-file").click(); });
+  $("photo-add").addEventListener("click", function () { $("photo-file").click(); });
+  $("photo-file").addEventListener("change", function (e) {
+    addPhotos(e.target.files);
+    e.target.value = "";
+  });
 
   $("logo-pick").addEventListener("click", function () { $("logo-file").click(); });
   $("logo-replace").addEventListener("click", function () { $("logo-file").click(); });
@@ -566,7 +770,7 @@
   function drawTile(tile) {
     if (tile.dataset.done) return;
     tile.dataset.done = "1";
-    var html = bridge.preview(JSON.stringify(brief), tile.dataset.layout, tile.dataset.theme);
+    var html = bridge.preview(JSON.stringify(expandBrief(brief)), tile.dataset.layout, tile.dataset.theme);
     var shot = tile.querySelector(".tile__shot");
     var frame = document.createElement("iframe");
     frame.setAttribute("scrolling", "no");
@@ -598,7 +802,7 @@
     toast("Building…");
     setTimeout(function () {
       try {
-        built = JSON.parse(bridge.build(JSON.stringify(brief), picked.layout, picked.theme));
+        built = JSON.parse(bridge.build(JSON.stringify(expandBrief(brief)), picked.layout, picked.theme));
       } catch (e) {
         console.error(e);
         toast("Build failed — see the console");
@@ -635,11 +839,17 @@
       .replace('<script src="assets/site.js" defer></script>', "<script>" + js + "<\/script>");
     // A srcdoc frame has no assets folder, so point the logo at its data URI
     // rather than leaving a broken image in the preview.
-    if (brief && brief.logo) {
-      var uri = brief.logo;
+    var full = expandBrief(brief || {});
+    if (full.logo) {
       html = html
-        .replace(/src="assets\/logo\.[a-z]+"/g, function () { return 'src="' + uri + '"'; })
+        .replace(/src="assets\/logo\.[a-z]+"/g, function () { return 'src="' + full.logo + '"'; })
         .replace(/<link rel="icon" href="assets\/logo\.[a-z]+"[^>]*>/g, "");
+    }
+    if (full.photos && full.photos.length) {
+      html = html.replace(/src="assets\/photo-(\d+)\.[a-z]+"/g, function (m, n) {
+        var uri = full.photos[parseInt(n, 10) - 1];
+        return uri ? 'src="' + uri + '"' : m;
+      });
     }
     return html;
   }

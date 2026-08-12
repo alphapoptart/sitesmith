@@ -409,6 +409,27 @@ def artwork(name, t, variant=0, w=800, h=600):
     )
 
 
+def picture(b, t, slot, w, h, alt=""):
+    """A real photo for this slot if the brief has one, otherwise generated artwork.
+
+    Slots cycle through whatever photos exist, so one photo fills every position
+    rather than leaving half the page abstract and half photographic.
+    """
+    photos = b.get("photos") or []
+    if photos:
+        index = slot % len(photos)
+        photo = photos[index]
+        # By default the page links the written asset; photo_hrefs lets a preview
+        # point at data URIs instead, so five pages do not each inline every photo.
+        hrefs = b.get("photo_hrefs")
+        href = hrefs[index] if hrefs else f"assets/photo-{index + 1}.{photo['ext']}"
+        label = alt or photo.get("alt") or f"{b.get('name', '')} — our work"
+        return (f'<img class="shot" src="{esc(href)}" alt="{esc(label)}" '
+                f'loading="lazy" decoding="async" '
+                f'width="{int(photo["w"])}" height="{int(photo["h"])}">')
+    return artwork(b.get("name", ""), t, variant=slot, w=w, h=h)
+
+
 ICONS = {
     "wrench": "M14 6a4 4 0 0 0-5.5 4.8L3 16.3 5.7 19l5.5-5.5A4 4 0 0 0 16 8l-2.2 2.2-1.9-1.9L14 6z",
     "spark": "M12 2l2.2 6.1L20 10l-5.8 1.9L12 18l-2.2-6.1L4 10l5.8-1.9z",

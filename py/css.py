@@ -44,6 +44,7 @@ body {{
   overflow-x: hidden;
 }}
 img, svg {{ max-width: 100%; height: auto; display: block; }}
+img.shot {{ width: 100%; height: 100%; object-fit: cover; }}
 a {{ color: inherit; }}
 
 h1, h2, h3, h4, .display {{
@@ -284,7 +285,7 @@ def layout_css(name, t):
     """Structure that makes each layout genuinely different, not just re-skinned."""
     common_hero_art = f"""
 .hero-art {{ position: relative; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-lg); }}
-.hero-art svg {{ width: 100%; height: 100%; object-fit: cover; }}
+.hero-art svg, .hero-art img.shot {{ width: 100%; height: 100%; object-fit: cover; }}
 """
     if name == "classic":
         return common_hero_art + f"""
@@ -610,6 +611,7 @@ body {{ background: var(--surface-2); }}
 .hero h1 {{ font-size: clamp(2.5rem, 1.3rem + 5.4vw, 4.8rem); max-width: 15ch; }}
 .collage {{ display: grid; grid-template-columns: repeat(6, 1fr); gap: .8rem; margin-top: clamp(2.5rem, 6vw, 4rem); }}
 .collage > * {{ border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }}
+.collage svg, .collage img.shot {{ width: 100%; height: 100%; object-fit: cover; }}
 .collage > :nth-child(1) {{ grid-column: span 6; aspect-ratio: 16/9; }}
 .collage > :nth-child(2) {{ grid-column: span 3; aspect-ratio: 4/3; }}
 .collage > :nth-child(3) {{ grid-column: span 3; aspect-ratio: 4/3; }}
@@ -626,7 +628,7 @@ body {{ background: var(--surface-2); }}
   padding: 1.5rem; color: #fff; isolation: isolate; text-decoration: none;
 }}
 .tile__art {{ position: absolute; inset: 0; z-index: -2; }}
-.tile__art svg {{ width: 100%; height: 100%; }}
+.tile__art svg, .tile__art img.shot {{ width: 100%; height: 100%; object-fit: cover; }}
 .tile::after {{
   content: ""; position: absolute; inset: 0; z-index: -1;
   background: linear-gradient(to top, rgba(0,0,0,.82) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,.05) 100%);
@@ -636,10 +638,11 @@ body {{ background: var(--surface-2); }}
 .tile__body h3 {{ margin: 0 0 .3rem; color: #fff; }}
 .tile__body p {{ margin: 0; font-size: .95rem; color: rgba(255,255,255,.86); }}
 .tile .svc-price {{ color: #fff; margin: 0 0 .35rem; }}
-.tile__art svg {{ transition: transform .5s cubic-bezier(.2,.7,.3,1); }}
-.tile:hover .tile__art svg {{ transform: scale(1.06); }}
+.tile__art svg, .tile__art img.shot {{ transition: transform .5s cubic-bezier(.2,.7,.3,1); }}
+.tile:hover .tile__art svg, .tile:hover .tile__art img.shot {{ transform: scale(1.06); }}
 .strip {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: .8rem; }}
 .strip > * {{ border-radius: var(--radius-sm); overflow: hidden; aspect-ratio: 1; }}
+.strip svg, .strip img.shot {{ width: 100%; height: 100%; object-fit: cover; }}
 """
 
 

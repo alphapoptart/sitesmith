@@ -136,6 +136,22 @@
         <p id="logo-error" class="hint error" hidden></p>
       </fieldset>
 
+      <fieldset class="group">
+        <legend>Photos of your work</legend>
+        <div id="photo-list" class="photo-grid"></div>
+        <p id="photo-empty" class="hint">No photos yet, so the artwork is generated
+           shapes. Real photos of real work beat them every time.</p>
+        <div class="logo-actions">
+          <button type="button" class="btn btn--ghost btn--sm" id="photo-pick">Choose photos…</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="photo-add">Add more</button>
+        </div>
+        <p id="photo-count" class="hint"></p>
+        <p id="photo-busy" class="hint" hidden>Resizing…</p>
+        <p id="photo-error" class="hint error" hidden></p>
+        <p class="hint">Up to 8. They get resized on this phone before anything is
+           stored, which also strips location data from the file.</p>
+      </fieldset>
+
       <div class="row">
         <label class="field"><span>Name on the card</span>
           <input name="owner" autocapitalize="words" placeholder="Dan Whitcombe"></label>
@@ -308,6 +324,7 @@
 </div>
 
 <input type="file" id="import-file" accept="application/json,.json" hidden>
+<input type="file" id="photo-file" hidden multiple accept="image/*">
 <input type="file" id="logo-file" hidden
        accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,.png,.jpg,.jpeg,.gif,.webp,.svg">
 <div class="toast" id="toast" hidden></div>
