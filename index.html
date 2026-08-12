@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>sitesmith</title>
+<meta name="description" content="Build a business website and matching print-ready business cards on your phone. Works offline.">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="sitesmith">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div id="boot" class="boot">
+  <div class="boot__inner">
+    <svg class="boot__mark" viewBox="0 0 64 64" width="56" height="56" aria-hidden="true">
+      <path d="M32 3 57 17.5v29L32 61 7 46.5v-29z" fill="#2563eb"/>
+      <text x="32" y="33" text-anchor="middle" dominant-baseline="central"
+            fill="#fff" font-family="ui-sans-serif,system-ui,sans-serif"
+            font-size="24" font-weight="700">S</text>
+    </svg>
+    <h1>sitesmith</h1>
+    <p id="boot-status">Starting the generator…</p>
+    <div class="bar"><div class="bar__fill" id="boot-bar"></div></div>
+    <p class="boot__note" id="boot-note">First run downloads about 13&nbsp;MB. After that it works with no signal at all.</p>
+    <button class="btn btn--ghost" id="boot-retry" hidden>Try again</button>
+  </div>
+</div>
+
+<header class="topbar" hidden id="topbar">
+  <button class="icon-btn" id="back-btn" hidden aria-label="Back">&larr;</button>
+  <strong id="topbar-title">Your business</strong>
+  <button class="icon-btn" id="menu-btn" aria-label="Menu">&#9776;</button>
+</header>
+
+<main id="app" hidden>
+
+  <!-- ---------- 0. library ---------- -->
+  <section class="step" id="step-sites" hidden>
+    <h2>Your sites</h2>
+    <p class="lede" id="sites-sub">Everything you have built, kept on this phone.</p>
+
+    <div class="actions">
+      <button class="btn btn--lg" id="new-site">New site</button>
+      <button class="btn btn--ghost" id="find-published">Find my published sites</button>
+    </div>
+
+    <ul class="sites" id="sites-list"></ul>
+    <p class="empty" id="sites-empty" hidden>Nothing yet. Tap <b>New site</b> to start.</p>
+  </section>
+
+  <!-- ---------- 1. brief ---------- -->
+  <section class="step" id="step-brief">
+    <p class="kicker">Step 1 of 3</p>
+    <h2>Tell me about the business</h2>
+    <p class="lede">Only the name is required. Everything else can wait — you can come back and change any of it.</p>
+
+    <form id="brief-form" autocomplete="on">
+      <label class="field"><span>Business name</span>
+        <input name="name" required autocapitalize="words" enterkeyhint="next" placeholder="Riverside Plumbing &amp; Heating"></label>
+
+      <label class="field"><span>What do you do, in one line?</span>
+        <input name="tagline" autocapitalize="sentences" placeholder="Emergency plumbing and boiler work, seven days a week"></label>
+
+      <label class="field"><span>Line of work</span>
+        <select name="preset" id="preset-select"></select></label>
+
+      <label class="field"><span>Town / city / area</span>
+        <input name="city" autocapitalize="words" placeholder="Shrewsbury"></label>
+
+      <div class="row">
+        <label class="field"><span>Phone</span>
+          <input name="phone" type="tel" inputmode="tel" placeholder="01743 555 0142"></label>
+        <label class="field"><span>Email</span>
+          <input name="email" type="email" inputmode="email" autocapitalize="off" placeholder="hello@example.co.uk"></label>
+      </div>
+
+      <label class="field"><span>Street address <em>optional</em></span>
+        <input name="address" autocapitalize="words" placeholder="4 Mill Yard, Shrewsbury SY1 2AB"></label>
+
+      <label class="field"><span>Opening hours</span>
+        <input name="hours" placeholder="Mon–Sat 7am – 8pm · Emergencies 24/7"></label>
+
+      <fieldset class="field">
+        <legend>Services <em>one per line</em></legend>
+        <textarea name="services_raw" rows="6" id="services-raw" autocapitalize="sentences"></textarea>
+        <button type="button" class="btn btn--ghost btn--sm" id="use-defaults">Use the usual ones for this trade</button>
+      </fieldset>
+
+      <div class="switch">
+        <label><input type="checkbox" id="show-prices"> <span>Show prices on the site</span></label>
+      </div>
+
+      <div id="price-block" hidden>
+        <div class="row">
+          <label class="field"><span>Currency</span>
+            <input name="currency" id="currency" value="£" inputmode="text" size="4"></label>
+          <label class="field"><span>Position</span>
+            <select name="currency_after" id="currency-after">
+              <option value="0">Before — £18</option>
+              <option value="1">After — 18 kr</option>
+            </select></label>
+        </div>
+        <p class="hint">Type prices as bare numbers — <code>18</code>, <code>from 120</code>, <code>45/hr</code>. Words like <code>POA</code> or <code>Free</code> are left alone.</p>
+        <div id="price-rows"></div>
+      </div>
+
+      <div class="row">
+        <label class="field"><span>Name on the card</span>
+          <input name="owner" autocapitalize="words" placeholder="Dan Whitcombe"></label>
+        <label class="field"><span>Job title</span>
+          <input name="owner_title" autocapitalize="words" placeholder="Master Plumber"></label>
+      </div>
+
+      <div class="row">
+        <label class="field"><span>Years in business</span>
+          <input name="years" inputmode="numeric" placeholder="18"></label>
+        <label class="field"><span>Domain <em>if you have one</em></span>
+          <input name="domain" inputmode="url" autocapitalize="off" placeholder="riversideplumbing.co.uk"></label>
+      </div>
+
+      <label class="field"><span>Main button text</span>
+        <input name="cta" placeholder="Get a fixed quote"></label>
+
+      <label class="field"><span>About paragraph <em>leave blank and one gets written for you to edit later</em></span>
+        <textarea name="about" rows="4" autocapitalize="sentences"
+                  placeholder="Two or three sentences in your own words. Who you are, why you started, what a customer can expect."></textarea></label>
+    </form>
+
+    <div class="actions">
+      <button class="btn btn--lg" id="to-gallery">Pick a design</button>
+      <button class="btn btn--ghost" id="load-demo">Load the demo business</button>
+    </div>
+  </section>
+
+  <!-- ---------- 2. gallery ---------- -->
+  <section class="step" id="step-gallery" hidden>
+    <p class="kicker">Step 2 of 3</p>
+    <h2>Pick a design</h2>
+    <p class="lede" id="gallery-count">160 combinations, every one built with your own words.</p>
+
+    <div class="filters">
+      <div class="chips" id="layout-chips" data-group="layout"></div>
+      <div class="chips" id="theme-chips" data-group="theme"></div>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+    <p class="empty" id="gallery-empty" hidden>Nothing matches those two filters.</p>
+  </section>
+
+  <!-- ---------- 3. result ---------- -->
+  <section class="step" id="step-build" hidden>
+    <p class="kicker">Step 3 of 3</p>
+    <h2 id="build-title">Your site</h2>
+    <p class="lede" id="build-sub"></p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab is-on" data-pane="pane-site" role="tab">Site</button>
+      <button class="tab" data-pane="pane-cards" role="tab">Cards</button>
+      <button class="tab" data-pane="pane-publish" role="tab">Publish</button>
+      <button class="tab" data-pane="pane-todo" role="tab">To do</button>
+    </div>
+
+    <div class="pane" id="pane-site">
+      <div class="phone-frame"><iframe id="site-frame" title="Site preview"></iframe></div>
+      <div class="actions">
+        <button class="btn btn--lg" id="download-zip">Download the site</button>
+        <button class="btn btn--ghost" id="open-site">Open full screen</button>
+      </div>
+      <p class="hint">The zip contains every page, the cards and the deploy notes. Drop it on <a href="https://app.netlify.com/drop" target="_blank" rel="noopener">Netlify Drop</a> to put it online free.</p>
+    </div>
+
+    <div class="pane" id="pane-cards" hidden>
+      <div class="card-preview" id="card-preview"></div>
+      <div class="actions">
+        <button class="btn btn--lg" id="print-cards">Print / save as PDF</button>
+        <button class="btn btn--ghost" id="download-cards">Download card files</button>
+      </div>
+      <p class="hint">Print at 3.75 &times; 2.25 in with margins off. That is trim plus bleed, which is what online printers ask for.</p>
+    </div>
+
+    <div class="pane" id="pane-publish" hidden>
+      <div class="live" id="live-box" hidden>
+        <b>Live</b>
+        <a id="live-url" target="_blank" rel="noopener"></a>
+        <div class="live__acts">
+          <button class="btn btn--sm btn--ghost" id="copy-live">Copy link</button>
+          <button class="btn btn--sm btn--ghost" id="share-live">Share</button>
+        </div>
+      </div>
+
+      <details class="pub" id="pub-github" open>
+        <summary><b>GitHub Pages</b><span>Free, your own repo, updates in place</span></summary>
+        <div class="pub__body">
+          <p class="hint">Needs a personal access token with <code>repo</code> scope. It is
+             stored on this phone only and sent nowhere except <code>api.github.com</code>.
+             <a href="https://github.com/settings/tokens/new?scopes=repo&amp;description=sitesmith"
+                target="_blank" rel="noopener">Create one</a>.</p>
+          <label class="field"><span>Token</span>
+            <input id="gh-token" type="password" autocapitalize="off" autocorrect="off"
+                   spellcheck="false" placeholder="ghp_…"></label>
+          <label class="field"><span>Repository name</span>
+            <input id="gh-repo" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+          <div class="switch"><label><input type="checkbox" id="gh-private">
+            <span>Private repo <em>Pages needs a paid plan for this</em></span></label></div>
+          <button class="btn btn--lg" id="gh-publish">Publish to GitHub</button>
+          <button class="btn btn--ghost btn--sm" id="gh-forget" hidden>Forget my token</button>
+          <ol class="log" id="gh-log" hidden></ol>
+        </div>
+      </details>
+
+      <details class="pub">
+        <summary><b>Netlify Drop</b><span>No account needed to start</span></summary>
+        <div class="pub__body">
+          <p class="hint">Netlify Drop takes a zip straight from your phone, and the contact
+             form on the site starts working the moment it lands there.</p>
+          <ol class="steps-list">
+            <li>Tap <b>Save the zip</b> — it goes to Files.</li>
+            <li>Open <a href="https://app.netlify.com/drop" target="_blank" rel="noopener">app.netlify.com/drop</a>.</li>
+            <li>Tap the drop area, choose <b>Browse</b>, and pick the zip.</li>
+          </ol>
+          <div class="actions">
+            <button class="btn" id="netlify-zip">Save the zip</button>
+            <a class="btn btn--ghost" href="https://app.netlify.com/drop" target="_blank" rel="noopener">Open Netlify Drop</a>
+          </div>
+        </div>
+      </details>
+
+      <details class="pub">
+        <summary><b>Cloudflare Pages</b><span>Free, unlimited bandwidth</span></summary>
+        <div class="pub__body">
+          <p class="hint">Needs a free Cloudflare account. Direct Upload takes the same zip.
+             The contact form will need a Formspree endpoint here — see DEPLOY.md in the zip.</p>
+          <div class="actions">
+            <button class="btn" id="cf-zip">Save the zip</button>
+            <a class="btn btn--ghost" href="https://dash.cloudflare.com/?to=/:account/pages/new/upload" target="_blank" rel="noopener">Open Cloudflare Pages</a>
+          </div>
+        </div>
+      </details>
+
+      <details class="pub">
+        <summary><b>Anywhere else</b><span>It is just HTML in a folder</span></summary>
+        <div class="pub__body">
+          <p class="hint">No build step and no dependencies, so any static host or plain
+             web hosting will serve it. Free options that take a zip or a folder:
+             Codeberg Pages, GitLab Pages, Neocities, Surge, Render.</p>
+          <div class="actions">
+            <button class="btn" id="share-zip">Share the zip</button>
+            <button class="btn btn--ghost" id="plain-zip">Save the zip</button>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="pane" id="pane-todo" hidden>
+      <ul class="todo" id="todo-list"></ul>
+    </div>
+
+    <div class="actions actions--end">
+      <button class="btn btn--ghost" id="change-design">Try a different design</button>
+    </div>
+  </section>
+</main>
+
+<div class="sheet" id="menu-sheet" hidden>
+  <div class="sheet__panel">
+    <h3>sitesmith</h3>
+    <button class="sheet__item" id="menu-sites">All your sites</button>
+    <button class="sheet__item" id="menu-edit">Edit the details</button>
+    <button class="sheet__item" id="menu-gallery">Pick a different design</button>
+    <button class="sheet__item" id="menu-export">Export the brief</button>
+    <button class="sheet__item" id="menu-import">Load a brief</button>
+    <button class="sheet__item sheet__item--warn" id="menu-reset">Delete this site</button>
+    <p class="sheet__meta" id="menu-meta"></p>
+    <button class="btn btn--ghost" id="menu-close">Close</button>
+  </div>
+</div>
+
+<input type="file" id="import-file" accept="application/json,.json" hidden>
+<div class="toast" id="toast" hidden></div>
+
+<script src="vendor/pyodide/pyodide.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
