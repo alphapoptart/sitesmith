@@ -154,7 +154,20 @@ def front(b, t):
     body.append(brand_svg(b, t, SAFE + 5, SAFE + 5, 150, on_dark=True,
                           max_w=460))
 
-    name_max = W - SAFE * 2 - 40
+    # QR on the front as well as the back. It sits on a light plate over the accent
+    # wedge: an inverted QR (light modules on dark) is read inconsistently by
+    # scanners, and the plate's padding doubles as the quiet zone the spec wants.
+    payload, _caption = qr_payload(b)
+    qr_px, pad = 180, 28
+    plate = qr_px + pad * 2
+    qx, qy = W - SAFE - plate, H - SAFE - plate
+    body.append(f'<rect x="{qx}" y="{qy}" width="{plate}" height="{plate}" '
+                f'rx="{max(4, int(plate * 0.06))}" fill="{ink}"/>')
+    body.append(_nested(qr.svg(payload, dark=bg, light=None, quiet=0, module=6),
+                        qx + pad, qy + pad, qr_px))
+
+    # The text column now stops short of the QR so nothing runs underneath it.
+    name_max = qx - (SAFE + 5) - 36
     n_size = fit_size(b["name"], name_max, 74, 34)
     name_lines = wrap(b["name"], name_max, n_size, 2)
     y = SAFE + 240
