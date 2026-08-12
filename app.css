@@ -232,3 +232,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
          border-radius: 999px; font-size: .9rem; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* --- logo picker --- */
+.group { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1rem .4rem;
+         margin: 0 0 .9rem; }
+.group > legend { font-size: .85rem; font-weight: 600; padding: 0 .4rem; }
+.logo-preview { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.logo-preview img { max-width: 140px; max-height: 64px; width: auto; height: auto;
+                    background: repeating-conic-gradient(#0000 0 25%, #8883 0 50%)
+                                50% / 14px 14px;
+                    border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.logo-actions { display: flex; gap: .5rem; margin-top: .5rem; flex-wrap: wrap; }
+.hint.error { color: #d1344b; font-weight: 600; }

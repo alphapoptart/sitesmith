@@ -5,6 +5,7 @@ whatever the phone produces is what the Mac produces. Nothing in this file
 re-implements generation — it only marshals arguments and collects output.
 """
 
+import base64
 import io
 import json
 import os
@@ -56,6 +57,8 @@ def preview(brief_json, layout, theme_key):
     """One self-contained page for a gallery tile — styles inlined so the iframe
     needs no network and no file paths."""
     b = _brief(brief_json)
+    if b.get("logo"):
+        b = dict(b, logo_href=b["logo"])
     t = design.theme(theme_key)
     html = layouts.render("index.html", b, t, layout)
     sheet = css_for(layout, t)
@@ -127,16 +130,21 @@ def build(brief_json, layout, theme_key):
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(text)
 
-    out = {}
+    # A logo asset is bytes, not text, so anything that will not decode as UTF-8 is
+    # handed over base64-encoded and rebuilt as a Uint8Array on the JavaScript side.
+    out, blobs = {}, {}
     for dirpath, _dirs, names in os.walk(site):
         for name in names:
             full = os.path.join(dirpath, name)
-            rel = os.path.relpath(full, site)
-            with open(full, encoding="utf-8") as fh:
-                out[rel.replace(os.sep, "/")] = fh.read()
+            rel = os.path.relpath(full, site).replace(os.sep, "/")
+            data = open(full, "rb").read()
+            try:
+                out[rel] = data.decode("utf-8")
+            except UnicodeDecodeError:
+                blobs[rel] = base64.b64encode(data).decode("ascii")
 
     return json.dumps({
-        "slug": b["slug"], "name": b["name"], "files": out,
+        "slug": b["slug"], "name": b["name"], "files": out, "binary": blobs,
         "placeholders": len(content.placeholders(b)),
         "cards_print": files["cards/cards-print.html"],
         "cards_proof": files["cards/cards-proof.html"],

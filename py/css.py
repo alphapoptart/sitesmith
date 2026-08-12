@@ -120,6 +120,8 @@ p:last-child {{ margin-bottom: 0; }}
 .site-head__inner {{ display: flex; align-items: center; gap: 1.25rem; padding-block: .85rem; }}
 .brand {{ display: inline-flex; align-items: center; gap: .65rem; text-decoration: none; font-family: var(--font-display); font-weight: 700; letter-spacing: -.02em; font-size: 1.12rem; }}
 .brand svg {{ flex: none; }}
+.brand__logo {{ flex: none; width: auto; max-width: 190px; object-fit: contain; }}
+@media (max-width: 520px) {{ .brand__logo {{ max-width: 148px; }} }}
 .brand__name {{ text-transform: var(--display-case); }}
 .nav {{ display: flex; gap: .35rem; margin-left: auto; align-items: center; }}
 .nav a {{

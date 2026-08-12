@@ -63,6 +63,42 @@ def choose(prompt, options, default_key):
         print("    ^ pick one of the numbers")
 
 
+def logo_to_data_uri(path):
+    """Read a logo off disk into the portable form the brief stores. Keeping the
+    brief self-contained is what lets the same file build on the phone."""
+    import base64
+    import mimetypes
+    path = os.path.expanduser(path.strip().strip("'\""))
+    if not os.path.isfile(path):
+        raise ValueError(f"no file at {path}")
+    mime = mimetypes.guess_type(path)[0]
+    if not mime:
+        mime = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg",
+                "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"
+                }.get(path.rsplit(".", 1)[-1].lower(), "")
+    if mime not in content._MIME_EXT:
+        raise ValueError(f"{os.path.basename(path)} is not a PNG, JPEG, GIF, "
+                         f"WebP or SVG")
+    raw = open(path, "rb").read()
+    if len(raw) > content.LOGO_MAX_BYTES:
+        raise ValueError(f"{os.path.basename(path)} is {len(raw) // 1024} KB — keep "
+                         f"it under {content.LOGO_MAX_BYTES // 1024} KB")
+    return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+
+
+def ask_logo(b):
+    path = ask("Logo file (optional — png, jpg, svg)", "")
+    if not path:
+        return
+    try:
+        b["logo"] = logo_to_data_uri(path)
+    except ValueError as exc:
+        print(f"    ! {exc} — carrying on without a logo.")
+        return
+    b["logo_has_name"] = ask_yes("Does the logo already include the business name?")
+    b["logo_needs_light"] = ask_yes("Does it need a light background?", True)
+
+
 def ask_yes(prompt, default=False):
     suffix = "[Y/n]" if default else "[y/N]"
     try:
@@ -132,6 +168,8 @@ def interview():
         names = [s[0] for s in preset["services"][:6]]
     b["services"], b["currency"], b["currency_after"] = ask_prices(names)
 
+    ask_logo(b)
+
     b["owner"] = ask("Name on the business card")
     b["owner_title"] = ask("Job title on the card", "Owner")
     b["years"] = ask("Years in business (optional)")
@@ -158,11 +196,22 @@ def write_site(out_dir, b, t, layout, pages=None, preview=False):
         fh.write(css.base_css(t) + "\n" + css.layout_css(layout, t))
     with open(os.path.join(assets, "site.js"), "w", encoding="utf-8") as fh:
         fh.write(css.site_js())
-    with open(os.path.join(assets, "favicon.svg"), "w", encoding="utf-8") as fh:
-        fh.write(favicon(b["name"], t))
+    if b.get("logo") and not preview:
+        _, raw = content.parse_data_uri(b["logo"])
+        with open(os.path.join(assets, f"logo.{b['logo_ext']}"), "wb") as fh:
+            fh.write(raw)
+    # A wordmark makes a poor favicon at 16px, so only a roughly square logo takes
+    # that job; otherwise the generated monogram keeps it.
+    if not (b.get("logo") and b.get("logo_square")):
+        with open(os.path.join(assets, "favicon.svg"), "w", encoding="utf-8") as fh:
+            fh.write(favicon(b["name"], t))
+    # Only generate the monogram when there is no real logo — otherwise an SVG logo
+    # and the monogram would both want assets/logo.svg.
     if not preview:
-        with open(os.path.join(assets, "logo.svg"), "w", encoding="utf-8") as fh:
-            fh.write(logo_mark(b["name"], t, size=256, ink=t["accent"], plate=t["bg"]))
+        if not b.get("logo"):
+            with open(os.path.join(assets, "logo.svg"), "w", encoding="utf-8") as fh:
+                fh.write(logo_mark(b["name"], t, size=256, ink=t["accent"],
+                                   plate=t["bg"]))
         with open(os.path.join(assets, "og.svg"), "w", encoding="utf-8") as fh:
             fh.write(og_image(b, t))
     return out_dir
@@ -172,8 +221,7 @@ def og_image(b, t):
     """1200x630 social preview card."""
     name = layouts.e(b["name"])
     tag = layouts.e(b["tagline"])
-    mark = logo_mark(b["name"], t, size=110, ink=t["accent"], plate=t["hero_bg"])
-    mark = cards._nested(mark, 90, 90, 110)
+    mark = design.brand_svg(b, t, 90, 90, 110, on_dark=True, max_w=420)
     n_size = cards.fit_size(b["name"], 1020, 92, 44)
     lines = cards.wrap(b["tagline"], 1020, 38, 2)
     tag_svg = "".join(
@@ -305,6 +353,14 @@ def build_gallery(out_root, b, brief_path, open_it=True):
     if os.path.isdir(gal):
         shutil.rmtree(gal)
     os.makedirs(gal, exist_ok=True)
+
+    # One copy of the logo for all 160 previews rather than one each.
+    b = dict(b)
+    if b.get("logo"):
+        _, raw = content.parse_data_uri(b["logo"])
+        with open(os.path.join(gal, f"logo.{b['logo_ext']}"), "wb") as fh:
+            fh.write(raw)
+        b["logo_href"] = f"../logo.{b['logo_ext']}"
 
     figures = []
     total = 0
@@ -634,6 +690,8 @@ def main():
     def common(p):
         p.add_argument("--brief", default="brief.json")
         p.add_argument("--out", default=DEFAULT_OUT)
+        p.add_argument("--logo", default=None,
+                       help="path to a logo image; overrides the one in the brief")
 
     p_new = sub.add_parser("new", help="interview, then build the preview gallery")
     common(p_new)
@@ -708,6 +766,11 @@ def main():
     if not os.path.exists(args.brief):
         sys.exit(f"  No brief at {args.brief}. Run `new` first, or pass --brief.")
     b = content.load(args.brief)
+    if getattr(args, "logo", None):
+        try:
+            b = content.normalise(dict(b, logo=logo_to_data_uri(args.logo)))
+        except ValueError as exc:
+            sys.exit(f"  --logo: {exc}")
 
     if cmd == "gallery":
         index, total = build_gallery(args.out, b, args.brief, open_it=not args.no_open)

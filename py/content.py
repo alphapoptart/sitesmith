@@ -5,9 +5,12 @@ filler. Anything that would be a factual claim about the business (reviews,
 awards, stats) is emitted as an obvious placeholder rather than invented.
 """
 
+import base64
 import json
 import re
+import struct
 import unicodedata
+import urllib.parse
 
 PLACEHOLDER = "REPLACE"
 
@@ -268,6 +271,111 @@ def slugify(text):
     return s or "business"
 
 
+LOGO_MAX_BYTES = 512 * 1024
+
+_MIME_EXT = {
+    "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
+    "image/webp": "webp", "image/svg+xml": "svg",
+}
+
+
+def parse_data_uri(uri):
+    """-> (mime, raw bytes). Raises ValueError on anything that is not an image
+    data URI, so a bad paste fails loudly at brief time rather than silently
+    producing a broken <img> on every page."""
+    uri = (uri or "").strip()
+    if not uri.startswith("data:"):
+        raise ValueError("logo must be a data: URI")
+    head, _, payload = uri[5:].partition(",")
+    if not payload:
+        raise ValueError("logo data URI has no payload")
+    bits = head.split(";")
+    mime = bits[0].lower() or "application/octet-stream"
+    if mime not in _MIME_EXT:
+        raise ValueError(f"unsupported logo type {mime!r} — use PNG, JPEG, GIF, "
+                         f"WebP or SVG")
+    if "base64" in bits[1:]:
+        pad = "=" * (-len(payload) % 4)
+        try:
+            data = base64.b64decode(payload + pad, validate=False)
+        except Exception as exc:
+            raise ValueError(f"logo base64 will not decode: {exc}")
+    else:
+        data = urllib.parse.unquote_to_bytes(payload)
+    if not data:
+        raise ValueError("logo decoded to zero bytes")
+    return mime, data
+
+
+def _svg_size(data):
+    text = data.decode("utf-8", "replace")[:4000]
+    def attr(name):
+        m = re.search(rf'\b{name}\s*=\s*["\']([^"\']+)["\']', text)
+        if not m:
+            return None
+        num = re.match(r"\s*([0-9.]+)", m.group(1))
+        return float(num.group(1)) if num else None
+    w, h = attr("width"), attr("height")
+    if w and h:
+        return w, h
+    box = re.search(r'\bviewBox\s*=\s*["\']([^"\']+)["\']', text)
+    if box:
+        parts = re.split(r"[\s,]+", box.group(1).strip())
+        if len(parts) == 4:
+            try:
+                return abs(float(parts[2])), abs(float(parts[3]))
+            except ValueError:
+                pass
+    return None
+
+
+def image_size(data, mime):
+    """(width, height) in pixels, or None if the header cannot be read. Enough
+    header parsing to lay a logo out without distorting it — no decoding."""
+    try:
+        if mime == "image/png" and data[:8] == b"\x89PNG\r\n\x1a\n":
+            w, h = struct.unpack(">II", data[16:24])
+            return float(w), float(h)
+        if mime == "image/gif" and data[:3] == b"GIF":
+            w, h = struct.unpack("<HH", data[6:10])
+            return float(w), float(h)
+        if mime == "image/jpeg" and data[:2] == b"\xff\xd8":
+            i = 2
+            while i + 9 < len(data):
+                if data[i] != 0xFF:
+                    i += 1
+                    continue
+                marker = data[i + 1]
+                if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                    i += 2
+                    continue
+                length = struct.unpack(">H", data[i + 2:i + 4])[0]
+                if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                    h, w = struct.unpack(">HH", data[i + 5:i + 9])
+                    return float(w), float(h)
+                i += 2 + length
+            return None
+        if mime == "image/webp" and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            chunk = data[12:16]
+            if chunk == b"VP8X":
+                w = int.from_bytes(data[24:27], "little") + 1
+                h = int.from_bytes(data[27:30], "little") + 1
+                return float(w), float(h)
+            if chunk == b"VP8 ":
+                w = struct.unpack("<H", data[26:28])[0] & 0x3FFF
+                h = struct.unpack("<H", data[28:30])[0] & 0x3FFF
+                return float(w), float(h)
+            if chunk == b"VP8L":
+                bits = int.from_bytes(data[21:25], "little")
+                return float((bits & 0x3FFF) + 1), float(((bits >> 14) & 0x3FFF) + 1)
+            return None
+        if mime == "image/svg+xml":
+            return _svg_size(data)
+    except Exception:
+        return None
+    return None
+
+
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
 
@@ -294,6 +402,7 @@ def format_price(raw, currency="", after=False):
 DEFAULT_BRIEF = {
     "name": "", "tagline": "", "preset": "general", "city": "",
     "currency": "", "currency_after": False,
+    "logo": "", "logo_has_name": False, "logo_needs_light": True,
     "phone": "", "email": "", "address": "", "hours": "Mon–Fri, 8am – 6pm",
     "services": [], "owner": "", "owner_title": "", "domain": "",
     "cta": "", "years": "", "about": "", "layout": "classic", "theme": "slate",
@@ -323,6 +432,34 @@ def normalise(brief):
         b["cta"] = preset["cta"]
     if not b["owner_title"]:
         b["owner_title"] = "Owner"
+
+    # A logo that will not parse is dropped rather than emitted as a broken <img> on
+    # every page — the reason lands in CONTENT.md via logo_error.
+    b["logo_error"] = ""
+    b["logo_mime"] = b["logo_ext"] = ""
+    b["logo_w"] = b["logo_h"] = 0.0
+    b["logo_square"] = False
+    if b["logo"]:
+        try:
+            mime, data = parse_data_uri(b["logo"])
+            if len(data) > LOGO_MAX_BYTES:
+                raise ValueError(
+                    f"logo is {len(data) // 1024} KB — keep it under "
+                    f"{LOGO_MAX_BYTES // 1024} KB so pages stay quick to load")
+            size = image_size(data, mime)
+            b["logo_mime"] = mime
+            b["logo_ext"] = _MIME_EXT[mime]
+            if size:
+                b["logo_w"], b["logo_h"] = size
+                ratio = b["logo_w"] / b["logo_h"] if b["logo_h"] else 0
+                b["logo_square"] = 0.8 <= ratio <= 1.25
+            else:
+                # Unknown dimensions: assume square so nothing gets stretched.
+                b["logo_w"] = b["logo_h"] = 1.0
+                b["logo_square"] = True
+        except ValueError as exc:
+            b["logo_error"] = str(exc)
+            b["logo"] = ""
 
     # Prices stay free text ("from £120", "POA", "£45/hr"). The currency, if the brief
     # sets one, is only applied to a price typed as a bare number.
@@ -411,6 +548,8 @@ def placeholders(b):
 
     scan("About paragraph", b["about"])
     scan("Hero sub-heading", b.get("hero_lede", ""))
+    if b.get("logo_error"):
+        found.append(("Logo", f"not used — {b['logo_error']}"))
     for s in b["services"]:
         scan(f"Service: {s['title']}", s["desc"])
     for p in b["points"]:

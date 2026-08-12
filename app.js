@@ -310,6 +310,9 @@
     var names = serviceNames();
     if (!names.length) names = $("show-prices").checked ? currentPreset().services : [];
     out.services = names.map(function (n) { return { title: n, price: prices[n] || "" }; });
+    out.logo = logoState.uri;
+    out.logo_has_name = $("logo-has-name").checked;
+    out.logo_needs_light = $("logo-needs-light").checked;
     out.layout = picked.layout;
     out.theme = picked.theme;
     return out;
@@ -331,7 +334,68 @@
     }
     if (b.currency) $("currency").value = b.currency;
     $("currency-after").value = b.currency_after ? "1" : "0";
+    $("logo-has-name").checked = !!b.logo_has_name;
+    $("logo-needs-light").checked = b.logo_needs_light !== false;
+    setLogo(b.logo || "", true);
   }
+
+  // --- logo -----------------------------------------------------------------
+  var logoState = { uri: "" };
+  var LOGO_MAX = 512 * 1024;
+  var LOGO_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp",
+                    "image/svg+xml"];
+
+  function logoError(msg) {
+    var el = $("logo-error");
+    el.textContent = msg || "";
+    el.hidden = !msg;
+  }
+
+  function setLogo(uri, quiet) {
+    logoState.uri = uri || "";
+    $("logo-empty").hidden = !!uri;
+    $("logo-set").hidden = !uri;
+    if (!quiet) logoError("");
+    if (!uri) { $("logo-thumb").removeAttribute("src"); $("logo-meta").textContent = ""; return; }
+    $("logo-thumb").src = uri;
+    var img = new Image();
+    img.onload = function () {
+      var kb = Math.round(uri.length * 0.75 / 1024);
+      var square = img.width / img.height >= 0.8 && img.width / img.height <= 1.25;
+      $("logo-meta").textContent = img.width + " x " + img.height + " · ~" + kb + " KB · "
+        + (square ? "square, so it doubles as the favicon"
+                  : "wide, so the monogram stays as the favicon");
+    };
+    img.src = uri;
+  }
+
+  function pickLogo(file) {
+    logoError("");
+    if (!file) return;
+    if (LOGO_TYPES.indexOf(file.type) < 0) {
+      logoError("That is a " + (file.type || "unknown file") + ". Use PNG, JPEG, GIF, WebP or SVG.");
+      return;
+    }
+    if (file.size > LOGO_MAX) {
+      logoError(Math.round(file.size / 1024) + " KB is too big — keep it under 512 KB.");
+      return;
+    }
+    var reader = new FileReader();
+    reader.onerror = function () { logoError("Could not read that file."); };
+    reader.onload = function () {
+      setLogo(String(reader.result));
+      save();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  $("logo-pick").addEventListener("click", function () { $("logo-file").click(); });
+  $("logo-replace").addEventListener("click", function () { $("logo-file").click(); });
+  $("logo-remove").addEventListener("click", function () { setLogo(""); save(); });
+  $("logo-file").addEventListener("change", function (e) {
+    pickLogo(e.target.files && e.target.files[0]);
+    e.target.value = "";
+  });
 
   $("preset-select").addEventListener("change", function () {
     if (!serviceNames().length) $("services-raw").value = currentPreset().services.join("\n");
@@ -544,7 +608,8 @@
       var themeLabel = labelFor(CAT.themes, picked.theme);
       $("build-title").textContent = built.name;
       $("build-sub").textContent = layoutLabel + " / " + themeLabel + " · " +
-        Object.keys(built.files).length + " files";
+        (Object.keys(built.files).length
+         + Object.keys(built.binary || {}).length) + " files";
       showSitePreview();
       showCards();
       showTodo();
@@ -564,10 +629,19 @@
     var html = built.files[page] || "";
     var sheet = built.files["assets/site.css"] || "";
     var js = built.files["assets/site.js"] || "";
-    return html
+    html = html
       .replace('<link rel="stylesheet" href="assets/site.css">', "<style>" + sheet + "</style>")
       .replace('<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">', "")
       .replace('<script src="assets/site.js" defer></script>', "<script>" + js + "<\/script>");
+    // A srcdoc frame has no assets folder, so point the logo at its data URI
+    // rather than leaving a broken image in the preview.
+    if (brief && brief.logo) {
+      var uri = brief.logo;
+      html = html
+        .replace(/src="assets\/logo\.[a-z]+"/g, function () { return 'src="' + uri + '"'; })
+        .replace(/<link rel="icon" href="assets\/logo\.[a-z]+"[^>]*>/g, "");
+    }
+    return html;
   }
 
   function showSitePreview() {
@@ -633,6 +707,9 @@
   $("download-zip").addEventListener("click", function () {
     var files = {};
     Object.keys(built.files).forEach(function (k) { files[built.slug + "/" + k] = built.files[k]; });
+    Object.keys(built.binary || {}).forEach(function (k) {
+      files[built.slug + "/" + k] = b64ToBytes(built.binary[k]);
+    });
     downloadZip(built.slug + "-site.zip", files);
   });
 
@@ -657,7 +734,8 @@
 
     names.forEach(function (name) {
       var nameBytes = enc.encode(name);
-      var data = enc.encode(files[name]);
+      var value = files[name];
+      var data = (value instanceof Uint8Array) ? value : enc.encode(value);
       var crc = crc32(data);
       var local = new Uint8Array(30 + nameBytes.length);
       var dv = new DataView(local.buffer);
@@ -838,6 +916,11 @@
                             { content: built.files[path], encoding: "utf-8" });
         tree.push({ path: path, mode: "100644", type: "blob", sha: blob.sha });
       }
+      for (var bpath in (built.binary || {})) {
+        var bblob = await gh(token, "POST", "/repos/" + owner + "/" + repo + "/git/blobs",
+                             { content: built.binary[bpath], encoding: "base64" });
+        tree.push({ path: bpath, mode: "100644", type: "blob", sha: bblob.sha });
+      }
 
       var parents = [];
       var baseTree;
@@ -935,7 +1018,17 @@
   function siteZipFiles() {
     var files = {};
     Object.keys(built.files).forEach(function (k) { files[k] = built.files[k]; });
+    Object.keys(built.binary || {}).forEach(function (k) {
+      files[k] = b64ToBytes(built.binary[k]);
+    });
     return files;
+  }
+
+  function b64ToBytes(b64) {
+    var bin = atob(b64);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
   }
 
   function siteZipBlob() {

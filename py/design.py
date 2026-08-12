@@ -218,6 +218,50 @@ def favicon(name, t):
     return logo_mark(name, t, size=64, ink=t["accent"], plate=t["bg"])
 
 
+def brand_html(b, t, height=34, on_dark=False):
+    """The mark as it appears in page markup: the owner's logo if they gave one,
+    otherwise the generated monogram."""
+    if b.get("logo"):
+        # logo_href lets callers point at a shared copy (the 160 gallery previews)
+        # or at the data URI itself (a self-contained preview page).
+        href = b.get("logo_href") or f"assets/logo.{b['logo_ext']}"
+        return (f'<img class="brand__logo" src="{esc(href)}" '
+                f'alt="{esc(b["name"])}" height="{height}" '
+                f'style="height:{height}px">')
+    ink = t["hero_ink"] if on_dark else t["accent"]
+    plate = t["hero_bg"] if on_dark else t["bg"]
+    return logo_mark(b["name"], t, size=height, ink=ink, plate=plate)
+
+
+def brand_svg(b, t, x, y, box, on_dark=False, max_w=None):
+    """The mark as an SVG fragment for the business card and the social image.
+    The logo is embedded as its data URI so the file stays self-contained, and it
+    sits on a light plate over dark artwork unless the brief says it does not need
+    one — a dark logo on a dark card is otherwise invisible in print."""
+    if not b.get("logo"):
+        ink = t["hero_ink"] if on_dark else t["accent"]
+        plate = t["hero_bg"] if on_dark else t["bg"]
+        mark = logo_mark(b["name"], t, size=box, ink=ink, plate=plate)
+        inner = mark[mark.index(">") + 1:mark.rindex("</svg>")]
+        return (f'<svg x="{x}" y="{y}" width="{box}" height="{box}" '
+                f'viewBox="0 0 64 64">{inner}</svg>')
+
+    # `box` caps the height; a wordmark is allowed to run wider than it is tall
+    # rather than being shrunk to fit a square.
+    w, h = b["logo_w"] or 1.0, b["logo_h"] or 1.0
+    scale = min((max_w or box) / w, box / h)
+    dw, dh = w * scale, h * scale
+    plate = ""
+    if on_dark and b.get("logo_needs_light", True):
+        pad = box * 0.14
+        plate = (f'<rect x="{x - pad:.0f}" y="{y + (box - dh) / 2 - pad:.0f}" '
+                 f'width="{dw + pad * 2:.0f}" height="{dh + pad * 2:.0f}" '
+                 f'rx="{box * 0.1:.0f}" fill="{t["hero_ink"]}"/>')
+    return (f'{plate}<image x="{x:.0f}" y="{y + (box - dh) / 2:.0f}" '
+            f'width="{dw:.0f}" height="{dh:.0f}" '
+            f'preserveAspectRatio="xMidYMid meet" href="{esc(b["logo"])}"/>')
+
+
 def pattern_svg(t, ink=None, opacity=0.10):
     """Seamless background texture as a data-URI-safe SVG string."""
     ink = ink or t["accent"]

@@ -16,7 +16,7 @@ import tempfile
 import time
 
 import qr
-from design import icon_svg, initials, logo_mark, pattern_svg
+from design import brand_svg, icon_svg, pattern_svg
 
 DPI = 300
 BLEED_IN = 0.125
@@ -149,9 +149,10 @@ def front(b, t):
                 f'fill="{t["accent"]}" opacity="0.9"/>')
 
     # On the dark front, the mark has to key off hero_ink — some themes have a dark
-    # accent, and accent-on-hero_bg would put dark letters on a dark plate.
-    logo = logo_mark(b["name"], t, size=150, ink=ink, plate=bg)
-    body.append(_nested(logo, SAFE + 5, SAFE + 5, 150))
+    # accent, and accent-on-hero_bg would put dark letters on a dark plate. A real
+    # logo gets a light plate underneath unless the brief says it does not need one.
+    body.append(brand_svg(b, t, SAFE + 5, SAFE + 5, 150, on_dark=True,
+                          max_w=460))
 
     name_max = W - SAFE * 2 - 40
     n_size = fit_size(b["name"], name_max, 74, 34)

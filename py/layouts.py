@@ -5,7 +5,8 @@ import re
 
 import content
 
-from design import artwork, icon_for, icon_svg, logo_mark
+import design
+from design import artwork, icon_for, icon_svg
 
 PAGES = [("index.html", "Home"), ("services.html", "Services"),
          ("about.html", "About"), ("contact.html", "Contact")]
@@ -19,9 +20,22 @@ def tel(number):
     return "tel:" + re.sub(r"[^0-9+]", "", number or "")
 
 
-def _mark(b, t, size=32, ink=None):
-    return logo_mark(b["name"], t, size=size, ink=ink or t["accent"],
-                     plate=t["bg"] if not ink else t["hero_bg"])
+def _mark(b, t, size=32):
+    return design.brand_html(b, t, height=size)
+
+
+def _brand(b, t, size):
+    """A wordmark logo already carries the name, so do not print it twice."""
+    name = ("" if b.get("logo") and b.get("logo_has_name")
+            else f'<span class="brand__name">{e(b["name"])}</span>')
+    return (f'<a class="brand" href="index.html">{_mark(b, t, size)}{name}</a>')
+
+
+def favicon_link(b):
+    if b.get("logo") and b.get("logo_square"):
+        mime = b["logo_mime"]
+        return f'<link rel="icon" href="assets/logo.{b["logo_ext"]}" type="{mime}">'
+    return '<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">'
 
 
 def head(b, t, page, title, description, layout):
@@ -41,7 +55,7 @@ def head(b, t, page, title, description, layout):
   <meta property="og:description" content="{e(description)}">
   <meta property="og:type" content="website">
   <meta property="og:image" content="assets/og.svg">{canonical}
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  {favicon_link(b)}
   <link rel="stylesheet" href="assets/site.css">
   <noscript><style>.reveal{{opacity:1;transform:none}}</style></noscript>
   <script type="application/ld+json">{local_business_jsonld(b)}</script>
@@ -103,7 +117,7 @@ def header(b, t, page, layout):
         cta = f'<a class="btn nav__cta" href="contact.html">{e(b["cta"])}</a>'
     return f"""<header class="site-head">
   <div class="wrap site-head__inner">
-    <a class="brand" href="index.html">{_mark(b, t, 34)}<span class="brand__name">{e(b['name'])}</span></a>
+    {_brand(b, t, 34)}
     <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav" aria-label="Menu">
       {icon_svg('menu', 22)}
     </button>
@@ -134,7 +148,7 @@ def footer(b, t, layout):
   <div class="wrap">
     <div class="foot-grid">
       <div>
-        <a class="brand" href="index.html">{_mark(b, t, 30)}<span class="brand__name">{e(b['name'])}</span></a>
+        {_brand(b, t, 30)}
         <p class="muted" style="margin-top:1rem;font-size:.94rem;max-width:32ch">{e(b['tagline'])}.{area}</p>
       </div>
       <div><h4>Pages</h4><ul>{nav}</ul></div>

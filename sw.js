@@ -2,7 +2,7 @@
  * precached on install — app shell, the Python modules and the ~13MB runtime.
  * After one successful install the app never needs the network again. */
 
-var VERSION = "sitesmith-6e0eac45ad35";
+var VERSION = "sitesmith-66c72c66191d";
 var SHELL = [
   "./",
   "index.html",

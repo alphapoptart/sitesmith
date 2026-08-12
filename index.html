@@ -110,6 +110,32 @@
         <div id="price-rows"></div>
       </div>
 
+      <fieldset class="group">
+        <legend>Logo</legend>
+        <div id="logo-empty">
+          <button type="button" class="btn btn--ghost btn--sm" id="logo-pick">Choose a logo…</button>
+          <p class="hint">PNG, JPEG, GIF, WebP or SVG, up to 512&nbsp;KB. Leave it out and
+             a monogram gets drawn from your initials.</p>
+        </div>
+        <div id="logo-set" hidden>
+          <div class="logo-preview">
+            <img id="logo-thumb" alt="Your logo">
+            <div>
+              <div id="logo-meta" class="hint"></div>
+              <div class="logo-actions">
+                <button type="button" class="btn btn--ghost btn--sm" id="logo-replace">Replace</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="logo-remove">Remove</button>
+              </div>
+            </div>
+          </div>
+          <div class="switch"><label><input type="checkbox" id="logo-has-name">
+            <span>The logo already includes the business name</span></label></div>
+          <div class="switch"><label><input type="checkbox" id="logo-needs-light" checked>
+            <span>It needs a light background</span></label></div>
+        </div>
+        <p id="logo-error" class="hint error" hidden></p>
+      </fieldset>
+
       <div class="row">
         <label class="field"><span>Name on the card</span>
           <input name="owner" autocapitalize="words" placeholder="Dan Whitcombe"></label>
@@ -282,6 +308,8 @@
 </div>
 
 <input type="file" id="import-file" accept="application/json,.json" hidden>
+<input type="file" id="logo-file" hidden
+       accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,.png,.jpg,.jpeg,.gif,.webp,.svg">
 <div class="toast" id="toast" hidden></div>
 
 <script src="vendor/pyodide/pyodide.js"></script>
