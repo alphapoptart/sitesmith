@@ -1,58 +1,55 @@
-# sitesmith
+# SiteSmith
 
-Build a small business website and matching print-ready business cards, from a phone,
-with no signal.
+An offline-first website and print-design generator for small businesses. From a phone, a user answers a short guided questionnaire, previews 160 layout and theme combinations using their own content, and exports a complete static website plus print-ready business cards with a scannable QR code.
 
-Answer about a dozen questions, look through 160 layout-and-theme combinations rendered
-with your own words, pick one, and get a complete static site plus 3.75 × 2.25 in cards
-with a scannable QR code. Publish straight to GitHub Pages, or take the zip anywhere.
+[View the live app](https://alphapoptart.github.io/sitesmith/)
 
-## It runs real Python
+## Why this project stands out
 
-The generator is Python. Rather than maintain a second JavaScript version that would
-quietly drift, the app ships [Pyodide](https://pyodide.org) and runs the same code the
-desktop tool runs. Output is byte-identical — verified by diffing a phone-generated site
-against a desktop build, all 20 files.
+- Runs the production Python generator directly in the browser with Pyodide
+- Works offline after the first visit through service-worker precaching
+- Produces byte-identical output across phone and desktop builds
+- Generates both a deployable static site and 3.75 × 2.25-inch print assets
+- Publishes to GitHub Pages or exports a portable ZIP
+- Keeps customer data on-device
 
-`py/` is a copy of the generator, made by `sync.py`. Only `py/bridge.py` is app code.
+## Technical approach
 
-## Offline
+The generator is written in Python. Instead of maintaining a second JavaScript implementation that could drift, SiteSmith ships Pyodide and runs the same generator used by the desktop workflow. Output parity is verified by diffing a phone-generated site against a desktop build across all 20 generated files.
 
-A service worker precaches the shell, the generator and the ~13 MB runtime on first
-load. After that it never needs the network — it boots, generates and exports with the
-server unreachable. Publishing is the only part that wants a connection.
+The service worker precaches the application shell, generator, and approximately 13 MB Python runtime. Once cached, the complete create-preview-export workflow runs without a network connection. Publishing is the only feature that requires connectivity.
 
-## Layout
+## Project structure
 
-```
-index.html app.css app.js      the app
-sw.js manifest.webmanifest     offline + install
-py/                            the generator, synced from the skill
-py/bridge.py                   the seam between the UI and the generator
-vendor/pyodide/                the runtime, committed so offline is real
-sync.py                        copy the generator in, re-stamp the cache
+```text
+index.html app.css app.js      Browser application
+sw.js manifest.webmanifest     Offline support and installation
+py/                            Synced Python generator
+py/bridge.py                   Browser-to-Python integration
+vendor/pyodide/                Vendored offline Python runtime
+sync.py                        Generator sync and cache versioning
 ```
 
-## Running it locally
+## Run locally
 
 ```bash
 python3 -m http.server 8124 --directory .
 ```
 
-Then open <http://localhost:8124>. Service workers need `localhost` or HTTPS, so opening
-`index.html` off the filesystem will not exercise offline mode.
+Open <http://localhost:8124>. Service workers require `localhost` or HTTPS, so opening `index.html` directly will not exercise offline mode.
 
-## Updating
+## Update the generator
 
 ```bash
-python3 sync.py && git add -A && git commit -m "sync generator" && git push
+python3 sync.py
 ```
 
-`sync.py` stamps a content digest into `sw.js`, which is what makes phones pick up the
-change instead of serving the old cache forever.
+`sync.py` copies the generator into the browser application and stamps a content digest into `sw.js`, ensuring installed clients receive updated assets instead of stale cached files.
 
-## Your data
+## Privacy and security
 
-Everything you type stays in `localStorage` on your device. Nothing is uploaded. The
-only outbound request the app ever makes is to `api.github.com`, and only when you tap
-Publish. A GitHub token, if you save one, is stored on that device and sent nowhere else.
+Form data stays in `localStorage` on the user's device. The application makes no outbound request except to `api.github.com` when the user explicitly chooses Publish. A GitHub token, if saved, remains on that device and is sent only to GitHub.
+
+## Skills demonstrated
+
+Python · JavaScript · Pyodide/WebAssembly · progressive web apps · service workers · offline-first architecture · static-site generation · GitHub API integration · deterministic testing · responsive product design
